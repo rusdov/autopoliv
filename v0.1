@@ -1,0 +1,120 @@
+#include <SPI.h>
+#include "HTU21D.h"
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <SimpleTimer.h> //here is the SimpleTimer library
+SimpleTimer timer;
+
+//pin setup
+const byte moisPin = A0;    
+const int pmpPin = 13;
+
+//const
+//gy21
+int moisture;
+int moisVolt;
+int moisSet;
+int pmpTimer = 100;
+int chkPer = 100;
+unsigned long pmpOnTime;
+bool pmpOn;
+  
+
+//led widget
+WidgetLED led1(V7);
+
+//Variables:
+float moist;
+float hum;
+float temp;
+
+
+
+HTU21D myHumidity;
+
+//blynk auth
+char auth[] = "-----------------------";
+char ssid[] = "---------";
+char pass[] = "---------";
+
+//widget read
+BLYNK_WRITE(3){
+  moisSet = param.asInt(); //Connect a slider widget to virtual pin 3 in the app. Slider range should be 0 to 140.
+}
+BLYNK_WRITE(4){
+  pmpTimer = param.asInt();
+}
+BLYNK_WRITE(5){
+  chkPer = param.asInt();
+}
+
+void gy21(){
+hum = myHumidity.readHumidity();
+temp = myHumidity.readTemperature();  
+
+Serial.print(" Temperature:");
+Serial.print(temp, 1);
+Serial.print("C");
+Serial.print(" Humidity:");
+Serial.print(hum, 1);
+Blynk.virtualWrite(V9, hum);
+Blynk.virtualWrite(V10, temp);
+}
+
+void msensor(){
+moisVolt = analogRead(moisPin);
+Serial.print ("msensor voltage =");
+Serial.print (moisVolt);
+
+moisture = constrain(moisVolt,460,849);
+moisture = map(moisVolt, 849, 460, 0, 100);
+Serial.print ("moisture =");
+Serial.print (moisture);
+Blynk.virtualWrite(V8, moisture);
+}
+
+void pmpProc(){
+   
+   if (moisture < moisSet){
+   digitalWrite(pmpPin, LOW);
+   pmpOn = true;
+   pmpOnTime = millis(); 
+   led1.on();
+   delay(pmpTimer);
+}
+
+if(pmpOn)
+if(millis() - pmpOnTime > pmpTimer){
+  digitalWrite(pmpPin, HIGH); 
+  led1.off();
+  pmpOn = false;      
+ }
+}
+
+void setup() {
+
+Serial.begin(9600);  
+myHumidity.begin();
+Blynk.begin(auth, ssid, pass);
+delay(200);
+
+//timers
+timer.setInterval(10000, msensor);
+timer.setInterval(10000, gy21);
+timer.setInterval(10000,pmpProc);
+//pimode
+pinMode(moisPin,INPUT);
+pinMode(pmpPin,OUTPUT);
+digitalWrite(pmpPin,HIGH);
+pmpOn = false;
+
+}
+BLYNK_CONNECTED(){
+  Blynk.syncAll();
+}
+
+void loop() {
+  
+Blynk.run(); 
+timer.run();  
+}
