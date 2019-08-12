@@ -1,0 +1,123 @@
+#include <SPI.h>
+#include "HTU21D.h"
+#include <ESP8266WiFi.h> 
+#include <BlynkSimpleEsp8266.h>
+#include <SimpleTimer.h> //here is the SimpleTimer library
+SimpleTimer timer;
+
+//pin setup
+const byte moisPin = A0;    
+const int pmpPin = 13;
+
+//const
+//gy21
+int moisture;
+int moisVolt;
+int moisSet;
+int pmpTimer = 0;
+int chkPeriod = 0;
+unsigned long pmpOnTime;
+unsigned long last_time;
+bool pmpOn;
+//moisture sensor
+const int airValue = 520;
+const int waterValue = 260;  
+
+//led widget
+WidgetLED led1(V7);
+
+//Variables:
+float moist;
+float hum;
+float temp;
+
+
+
+HTU21D myHumidity;
+
+//blynk auth
+char auth[] = "985de6c08c164ed4a694c5b9db0dafe3";
+char ssid[] = "adm13";
+char pass[] = "80679767510";
+char ipserv[] = "192.168.1.203";
+
+//widget read
+BLYNK_WRITE(3){
+  moisSet = param.asInt(); 
+}  
+BLYNK_WRITE(4){
+  pmpTimer = param.asInt();
+ }
+
+
+void gy21(){
+hum = myHumidity.readHumidity();
+temp = myHumidity.readTemperature();  
+
+Serial.print(" Temperature:");
+Serial.print(temp, 1);
+Serial.print("C");
+Serial.print(" Humidity:");
+Serial.print(hum, 1);
+Blynk.virtualWrite(V9, hum);
+Blynk.virtualWrite(V10, temp);
+}
+
+void msensor(){
+moisVolt = analogRead(moisPin);
+Serial.print ("msensor voltage =");
+Serial.print (moisVolt);
+
+moisture = constrain(moisVolt,460,859);
+moisture = map(moisVolt, 859, 460, 0, 100);
+if (moisture < 0){
+  moisture =0;
+}
+Serial.print ("moisture =");
+Serial.print (moisture);
+Blynk.virtualWrite(V8, moisture);
+}
+
+
+void setup() {
+
+Serial.begin(9600);  
+myHumidity.begin();
+//Blynk.begin(auth, ssid, pass);
+Blynk.begin(auth, ssid, pass, ipserv, 8080);
+
+//timers
+timer.setInterval(10000, msensor);
+timer.setInterval(10000, gy21);
+
+//pimode
+pinMode(moisPin,INPUT);
+pinMode(pmpPin,OUTPUT);
+digitalWrite(pmpPin,HIGH);
+pmpOn = false;
+
+}
+
+BLYNK_CONNECTED(){
+  Blynk.syncAll();
+}
+
+void loop() {
+  
+Blynk.run(); 
+timer.run(); 
+
+   if (moisture < moisSet){
+   digitalWrite(pmpPin, LOW);
+   pmpOn = true;
+   pmpOnTime = millis(); 
+   led1.on();
+}
+
+if(pmpOn)
+if(millis() - pmpOnTime > pmpTimer){
+  digitalWrite(pmpPin, HIGH); 
+  led1.off();
+  pmpOn = false;      
+ } 
+}
