@@ -89,10 +89,9 @@ void pmpProc(){
    pmpOn = true;
    pmpOnTime = millis(); 
    led1.on();
-   delay(pmpTimer);
 }
 
-if(pmpOn)
+if(pmpOn=true)
 if(millis() - pmpOnTime > pmpTimer){
   digitalWrite(pmpPin, HIGH); 
   led1.off();
