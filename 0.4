@@ -1,0 +1,160 @@
+#define BLYNK_PRINT Serial
+#include <SPI.h>
+#include "HTU21D.h"
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <SimpleTimer.h> 
+
+SimpleTimer timer;
+
+//pin setup
+const byte moisPin = A0;    
+const int pmpPin = 13;
+
+//gy21
+int moisture;
+int moisVolt;
+int moisSet;
+int pmpTimer = 100;
+unsigned long pmpOnTime;
+bool pmpOn;
+
+//distance
+#define trigPin 14
+#define echoPin 12
+long duration;
+int distance;
+int setDist;
+  
+//led widget
+WidgetLED led1(V7);
+WidgetLED led2(V12);
+
+//Variables:
+float moist;
+float hum;
+float temp;
+
+HTU21D myHumidity;
+
+//blynk auth
+char auth[] = "-----------------";
+char ssid[] = "-----------";
+char pass[] = "--------------";
+//char ipserv[] = "----------------";
+
+//widget read
+BLYNK_WRITE(3){
+  moisSet = param.asInt(); 
+}
+BLYNK_WRITE(4){
+  pmpTimer = param.asInt();
+}
+BLYNK_WRITE(5){
+  setDist = param.asInt();
+}
+ 
+void gy21(){
+hum = myHumidity.readHumidity();
+temp = myHumidity.readTemperature();  
+
+Serial.print(" Temperature:");
+Serial.print(temp, 1);
+Serial.print("C");
+Serial.print(" Humidity:");
+Serial.print(hum, 1);
+Blynk.virtualWrite(V9, hum);
+Blynk.virtualWrite(V10, temp);
+}
+
+void msensor(){
+moisVolt = analogRead(moisPin);
+Serial.print ("msensor voltage =");
+Serial.print (moisVolt);
+
+moisture = constrain(moisVolt,460,859);
+moisture = map(moisVolt, 859, 460, 0, 100);
+if (moisture < 0){
+  moisture =0;
+}
+Serial.print ("moisture =");
+Serial.print (moisture);
+Blynk.virtualWrite(V8, moisture);
+}
+
+void pmpProc(){
+   
+   if (moisture < moisSet){
+   digitalWrite(pmpPin, LOW);
+   pmpOn = true;
+   pmpOnTime = millis(); 
+   led1.on();
+   delay(pmpTimer);
+}
+
+if(pmpOn)
+if(millis() - pmpOnTime > pmpTimer){
+  digitalWrite(pmpPin, HIGH); 
+  led1.off();
+  pmpOn = false;      
+ }
+}
+
+void GetDistance(){
+  
+  digitalWrite(trigPin, LOW);  
+  delayMicroseconds(3); 
+  
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(12); 
+  
+  digitalWrite(trigPin, LOW);
+  duration = pulseIn(echoPin, HIGH);
+  distance = (duration/2) / 29.1;
+  Serial.print("value :");
+  Serial.println(distance);
+  Blynk.virtualWrite(V11, distance);
+}
+
+void tankAlarm(){
+if (distance > setDist){
+  led2.on();  
+}
+else{
+  led2.off();
+}
+}
+
+void setup() {
+
+Serial.begin(9600);  
+myHumidity.begin();
+
+//Blynk.begin(auth, ssid, pass, ipserv, 8080);
+Blynk.begin(auth, ssid, pass);
+//timers
+timer.setInterval(1000, msensor);
+timer.setInterval(1000, gy21);
+timer.setInterval(90000,pmpProc);
+timer.setInterval(1000,GetDistance);
+timer.setInterval(1000,tankAlarm);
+
+//pimode
+pinMode(moisPin,INPUT);
+pinMode(pmpPin,OUTPUT);
+digitalWrite(pmpPin,HIGH);
+pinMode(trigPin, OUTPUT);
+pinMode(echoPin, INPUT);
+
+pmpOn = false;
+
+}
+BLYNK_CONNECTED(){
+  Blynk.syncAll();
+ }
+
+void loop() {
+  
+Blynk.run(); 
+timer.run();  
+}
