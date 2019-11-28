@@ -20,8 +20,6 @@ OneWire oneWire(ONE_WIRE_BUS);
 DallasTemperature DS18B20(&oneWire);
 float wtemp;
 
-
-
 //gy21 setup
 int moisture;
 int moisVolt;
@@ -134,8 +132,6 @@ if(millis() - pmpOnTime > pmpTimer){
   pmpOn = false;      
  }
 }
-
-
 
 void tankAlarm(){
 if (distance > setDist){
