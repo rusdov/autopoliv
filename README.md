@@ -2,6 +2,7 @@ Board:
 nodeMCU V3
 
 Sensors:
+
 //hum+temp
 
 GY-21
