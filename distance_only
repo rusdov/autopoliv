@@ -1,0 +1,76 @@
+#define BLYNK_PRINT Serial
+#include <SPI.h>
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <SimpleTimer.h> 
+
+SimpleTimer timer;
+
+//hc-sr04 setup
+#define trigPin 0
+#define echoPin 2
+long duration;
+int distance;
+int setDist;
+
+WidgetLED led2(V12);
+
+//blynk auth
+char auth[] = "--------------------------";
+char ssid[] = "------------------------";
+char pass[] = "----------------------";
+
+BLYNK_WRITE(5){
+  setDist = param.asInt();
+}
+
+void GetDistance(){
+  
+  digitalWrite(trigPin, LOW);  
+  delayMicroseconds(3); 
+  
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(12); 
+  
+  digitalWrite(trigPin, LOW);
+  duration = pulseIn(echoPin, HIGH);
+  distance = (duration/2) / 29.1;
+  Serial.print("value :");
+  Serial.println(distance);
+  Blynk.virtualWrite(V11, distance);
+}
+
+void tankAlarm(){
+if (distance > setDist){
+  led2.on();  
+}
+else{
+  led2.off();
+}
+}
+
+void setup() {
+
+Serial.begin(9600);
+  
+
+Blynk.begin(auth, ssid, pass);
+
+//timers
+timer.setInterval(1000,GetDistance);
+timer.setInterval(1000,tankAlarm);
+
+//pimode
+pinMode(trigPin, OUTPUT);
+pinMode(echoPin, INPUT);
+}
+BLYNK_CONNECTED(){
+  Blynk.syncAll();
+ }
+
+
+void loop() {
+  
+Blynk.run(); 
+timer.run();  
+}
