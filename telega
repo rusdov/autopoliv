@@ -5,7 +5,7 @@ CTBot myBot;
 
 String ssid  = "Service"; 
 String pass  = "2233445566"; 
-String token = "933262641:AAEum7AZkJ_6OJQEWp7L-vAXKCeS-RQCk_4"; 
+String token = "933262641:AAEum7AZgjkhjkk"; 
 
 //Pinos dos leds
 uint8_t led1 = D4;
