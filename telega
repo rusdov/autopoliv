@@ -1,79 +1,187 @@
-//https://www.arduinoecia.com.br/bot-telegram-com-esp8266-nodemcu/
+#include <ESP8266WiFi.h>
+#include <WiFiClientSecure.h>
+#include <UniversalTelegramBot.h>
+#include <ArduinoJson.h>
 
-#include "CTBot.h"
-CTBot myBot;
+//timer
+#include <SimpleTimer.h> 
+SimpleTimer timer;
 
-String ssid  = "@@@@@@@@@@@"; 
-String pass  = "@@@@@@@@@@@@@@"; 
-String token = "933262641:AAEum7AZ"; 
+//auth
+char ssid[] = "3333333333";         // your network SSID (name)
+char password[] = "0333333333"; // your network password
+#define TELEGRAM_BOT_TOKEN "3333333333:AAHaSfsdfsdfsdffsdfsfsdDxkoK5vHYo8k"
 
-//Pinos dos leds
-uint8_t led1 = D4;
-uint8_t led2 = D3;
+WiFiClientSecure client;
+UniversalTelegramBot bot(TELEGRAM_BOT_TOKEN, client);
 
-void setup()
-{
-  Serial.begin(115200);
-  Serial.println("Inicializando bot Telegram...");
+//pins
+const byte moisPin = A0;    
+const int pmpPin = 2;
 
-  //Conexao na rede wifi
-  myBot.wifiConnect(ssid, pass);
+//vars
+int moisture;
+int moisVolt;
+int moisSet = 30;
+int pmpTimer = 1000;
+unsigned long pmpOnTime;
+bool pmpOn;
 
-  //Define o token
-  myBot.setTelegramToken(token);
+int delayBetweenChecks = 500;
+unsigned long lastTimeChecked;   //last time messages' scan has been done
 
-  //Verifica a conexao
-  if (myBot.testConnection())
-    Serial.println("nConexao Ok!");
-  else
-    Serial.println("nFalha na conexao!");
+unsigned long lightTimerExpires;
+boolean lightTimerActive = false;
+                                   //moisture read
+void msensor(){
+moisVolt = analogRead(moisPin);
+Serial.print("msensor voltage =  ");
+Serial.print(moisVolt);
 
-  //Define os pinos dos leds como saida e apaga os leds
-  pinMode(led1, OUTPUT);
-  pinMode(led2, OUTPUT);
-  digitalWrite(led1, HIGH);
-  digitalWrite(led2, HIGH);
+moisture = constrain(moisVolt,460,859);
+moisture = map(moisVolt, 855, 396, 0, 100);
+if (moisture < 0){
+  moisture =0;
+}
+if (moisture > 100){
+  moisture =100;
+}
+Serial.print("moisture =  ");
+Serial.print(moisture);
+}
+                                  //Pump process
+void pmpProc(){
+   
+   if (moisture < moisSet){
+   digitalWrite(pmpPin, HIGH);
+   pmpOn = true;
+   pmpOnTime = millis(); 
+   Serial.print("ПОЛИВ! ");
 }
 
-void loop()
-{
-  //Variavel que armazena a mensagem recebida
-  TBMessage msg;
+if(pmpOn=true)
+if(millis() - pmpOnTime > pmpTimer){
+  digitalWrite(pmpPin, LOW); 
+  pmpOn = false;      
+ }
+}
 
-  //Verifica se chegou alguma mensagem
-  if (myBot.getNewMessage(msg))
-  {
-    //Verifica se foi recebia a mensagem "Liga 1"
-    if (msg.text.equalsIgnoreCase("LIGA 1"))
-    {
-      //Liga o led 1 (vermelho)
-      digitalWrite(led1, LOW);
-      //Retorna uma pensagem informando que o led foi aceso
-      myBot.sendMessage(msg.sender.id, "LED 1 Aceso!");
-    }
-    else if (msg.text.equalsIgnoreCase("DESLIGA 1"))
-    {
-      digitalWrite(led1, HIGH);
-      myBot.sendMessage(msg.sender.id, "LED 1 Apagado!");
-    }
-    else if (msg.text.equalsIgnoreCase("LIGA 2"))
-    {
-      digitalWrite(led2, LOW);
-      myBot.sendMessage(msg.sender.id, "LED 2 Aceso!");
-    }
-    else if (msg.text.equalsIgnoreCase("DESLIGA 2"))
-    {
-      digitalWrite(led2, HIGH);
-      myBot.sendMessage(msg.sender.id, "LED 2 Apagado!");
-    }
-    else
-    {
-      //Caso receba qualquer outro comando, envia uma
-      //mensagem generica/informativa
-      String reply;
-      reply = (String)"Ola " + msg.sender.username + (String)"! Acesse www.arduinoecia.com.br e confira mais posts sobre ESP8266, Arduino e IoT!";
-      myBot.sendMessage(msg.sender.id, reply);
+void setup() {
+  
+  Serial.begin(115200);
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(100);
+  
+  //pin mode
+  pinMode(2, OUTPUT);
+  digitalWrite(2, LOW);
+  
+  // attempt to connect to Wifi network:
+  Serial.print("Connecting Wifi: ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print(".");
+    delay(500);
+  }
+
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.print("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  // Only required on 2.5 Beta
+  client.setInsecure();
+
+  bot.longPoll = 30;
+  
+  //func timer set
+  timer.setInterval(100, msensor);
+  timer.setInterval(100, pmpProc);
+ }
+
+void handleNewMessages(int numNewMessages) {
+
+  for (int i = 0; i < numNewMessages; i++) {
+
+    // If the type is a "callback_query", a inline keyboard button was pressed
+    if (bot.messages[i].type ==  F("callback_query")) {
+      String text = bot.messages[i].text;
+      Serial.print("Call back button pressed with text: ");
+      Serial.println(text);
+
+      if (text == F("ON")) {
+        digitalWrite(pmpPin, HIGH);
+      } 
+      
+      else if (text == F("OFF")) {
+        digitalWrite(pmpPin, LOW);
+      } 
+      
+      else if (text.startsWith("TIME")) {
+        text.replace("TIME", "");
+        int timeRequested = text.toInt();
+        
+        digitalWrite(pmpPin, HIGH);
+        lightTimerActive = true;
+        lightTimerExpires = millis() + (timeRequested * 1000 * 60);
+      }
+    } 
+    
+    else {
+      String chat_id = String(bot.messages[i].chat_id);
+      String text = bot.messages[i].text;
+
+      if (text == F("/options")) {
+
+        // Keyboard Json is an array of arrays.
+        // The size of the main array is how many row options the keyboard has
+        // The size of the sub arrays is how many coloums that row has
+
+        // "The Text" property is what shows up in the keyboard
+        // The "callback_data" property is the text that gets sent when pressed  
+        
+        String keyboardJson = F("[[{ \"text\" : \"ON\", \"callback_data\" : \"ON\" },{ \"text\" : \"OFF\", \"callback_data\" : \"OFF\" }],");
+        keyboardJson += F("[{ \"text\" : \"10 Mins\", \"callback_data\" : \"TIME10\" }, { \"text\" : \"20 Mins\", \"callback_data\" : \"TIME20\" }, { \"text\" : \"30 Mins\", \"callback_data\" : \"TIME30\" }]]");
+        bot.sendMessageWithInlineKeyboard(chat_id, "Dirka setup", "", keyboardJson);
+      }
+      
+      if (text == F("/status")) {
+
+        bot.sendMessage(chat_id,"Влажность почвы " + String(moisture) + "  %\n" + "Порог влажности " + String(moisSet) + "  %");
+       
+        
+      }
+      
+      // When a user first uses a bot they will send a "/start" command
+      // So this is a good place to let the users know what commands are available
+      if (text == F("/start")) {
+
+        bot.sendMessage(chat_id, "/options : returns the inline keyboard\n", "Markdown");
+      }
     }
   }
-  delay(500);
+}
+
+void loop() {
+  if (millis() > lastTimeChecked + delayBetweenChecks)  {
+
+    // getUpdates returns 1 if there is a new message from Telegram
+    int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+
+    if (numNewMessages) {
+      Serial.println("got response");
+      handleNewMessages(numNewMessages);
+    }
+
+    lastTimeChecked = millis();
+
+    if (lightTimerActive && millis() > lightTimerExpires) {
+      lightTimerActive = false;
+      digitalWrite(pmpPin, LOW);
+    }
+  }
+  timer.run(); 
 }
